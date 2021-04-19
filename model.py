@@ -9,7 +9,7 @@ from input_utils import symmetry, get_codes, get_input
 
 
 class MessageNetwork(tf.keras.layers.Layer):
-    """ Message Network that sends messages between variables """
+    """ Message Network that sends messages between variable states """
 
     def __init__(self, out_units, activation="linear", code="NN", **kwargs):
         """
@@ -557,7 +557,6 @@ class Run_QCSP_Model(tf.keras.Model):
 
         return total_loss
 
-    # @tf.function
     def train_step(self, inputs, models):
         rank = inputs["quantifier_rank"]
 
