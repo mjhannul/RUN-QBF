@@ -1,0 +1,97 @@
+\title{Recurrent unsupervised neural network for quantified Boolean formulae --  project notes}
+\author{
+Miika Hannula
+}
+\date{\today}
+
+\documentclass[12pt]{article}
+
+\usepackage{xspace}
+
+\newcommand*{\NP}{\mathsf{NP}}
+\newcommand*{\PTIME}{\mathsf{P}}
+\newcommand*{\SAT}{\mathsf{SAT}}
+\newcommand*{\PSPACE}{\mathsf{PSPACE}}
+\newcommand*{\QBF}{\mathsf{QBF}}
+\newcommand*{\RUNCSP}{\textrm{RUN-CSP}\xspace}
+\newcommand*{\RUNQBF}{\textrm{RUN-QBF}\xspace}
+\newcommand*{\calN}{\mathcal{N}}
+
+
+\begin{document}
+\maketitle
+
+%\begin{abstract}
+%Recently there has been 
+%\end{abstract}
+
+\section{Introduction}
+Recently there has been a flurry of interest in neural networks addressing $\NP$-complete problems \cite{AmizadehMW19,LemosPAL19,PratesALLV19,SelsamLBLMD19,TonshoffRWG20}. This project, which is still in progress, aims at harder problems that are typically represented as quantified Boolean formulae.
+
+The architecture and source code are modified and expanded from those behind \cite{TonshoffRWG20}, which introduces an unsupervised recurrent neural network for the maximum constraint satisfaction problem (\RUNCSP). The idea is clever yet simple. In short, the network outputs a soft variable assignment which  yields a soft truth value for each constraint. While training, the network seeks to minimize the combined negative log-likelihood over the soft truth values of the constraints. For evaluation, a hard assignment is obtained by taking the argmax of the soft assignment. The authors show, for instance, that a trained network is able to compete with state-of-the-art solvers over the maximum 2-satisfiability problem.
+
+This project seeks to expand ideas from \cite{TonshoffRWG20} to quantified Boolean formulae. We introduce a \RUNQBF network for predicting the truth value of a quantified Boolean formula. While the network is in principle designed to accommodate instances with unrestricted quantifier alternation, training such models is not expected to be feasible. Our focus is thus restricted on 2$\QBF$ instances for the second level $\Pi^\PTIME_2$ of the polynomial hierarchy.  That is, we consider quantified Boolean formulae in which a single universal quantifier block is followed by a single existential quantifier block. 
+
+Foremost, this is a personal project for practicing RNN networks with the Tensorflow framework. Not coincidentally, the subject matter relates  to the authors' recent research interests \cite{HannulaKLV21}. At the moment of writing these notes, the network is up and running but would need additional tuning and re-training.
+
+\paragraph{Related work.} There are different ways to utilize neural networks in $\QBF$ solving. One is to learn heuristics for existing algorithms \cite{LedermanRSL20}, to compete with hand-written ones. Another is to create architectures that directly address the problem.  How feasible, then, is this approach? \cite{abs-1904-12084} suspects that the same graph neural networks which have succesfully tackled $\SAT$ (cf. \cite{SelsamLBLMD19}) do not generalize to $\QBF$ because of their inability to reason about unsatisfiability. Very recently, \cite{abs-2101-06619} used neural Monte Carlo Tree Search for solving QBF instances. The test cases in that paper, however, are very small, consisting of only 21 quantified variables and 9 clauses. It seems not much is currently known about the prospects of deep learning for decision problems beyond $\NP$.
+
+\section{Preliminaries}
+The canonical complete problem for non-deterministic polynomial time ($\NP$) is the \emph{Boolean satisfiability problem} $\SAT$. This problem is to determine whether there exists a variable assignment that satisfies a given a Boolean formula. Beside $\NP$, other levels of the polynomial hierarchy, as well as polynomial space ($\PSPACE$), are likewise captured logically. The standard problem here is the quantified Boolean formula problem ($\QBF$).  The input is a \emph{quantified Boolean formula} of the form
+\[
+Q_1 \vec p_1 \ldots Q_n \vec p_n\theta,
+\]
+where $\vec p_1, \ldots ,\vec p_n$ are sequences of Boolean variables,  $Q_1, \ldots ,Q_n\in \{\exists ,\forall\}$ is an alternating sequence of quantifiers, and $\theta$ is a quantifier-free Boolean formula. The output is ``yes'' if the formula is true, and ``no'' otherwise. This problem is complete for $\PSPACE$, and for fixed $n$, it is complete for $\Sigma^\PTIME_n$ if $Q_1=\exists$ (respectively, $\Pi^\PTIME_n$ if $Q_1=\forall$).
+
+
+\section{\RUNQBF}
+\subsection{Idea}
+For a high-level illustration of \RUNQBF, consider an example input formula 
+\[
+\phi_{\Pi_2}=\forall x \exists y(\overline{y} \land (x \lor y)).
+\]
+For solving formulae of this form, we first train a \RUNQBF model $\calN_{\Sigma^\PTIME_1}$ to output variable assignments that maximize the number of satisfied clauses in Boolean formulae. Then, we train another \RUNQBF model $\calN_{\Pi^\PTIME_2}$ that outputs variable assignments for universally quantified variables and then calls  $\calN_{\Sigma^\PTIME_1}$ to run in inference mode. Thus, these two models essentially play the role of \emph{falsifier} and \emph{verifier} in the  game semantics of classical logic. The challenge is to train them as well as possible.
+
+The training flow for $\calN_{\Pi^\PTIME_2}$ w.r.t. a batch $\{\phi_{\Pi_2}\}$ of size one would be as follows:
+\begin{enumerate}
+\item $\calN_{\Pi^\PTIME_2}$ outputs soft assignments for $x$ w.r.t. $\phi_{\Pi_2}$, iterating its LSTM cell.
+\item For each assignment of $x$: $\calN_{\Sigma^\PTIME_1}$
+\begin{enumerate}
+\item  computes weights\footnote{Here, the weight of the singleton clause $C_1=\overline{y}$ is 1, and the weight of the other singleton clause $C_2=y$ is $(1-p)$, where $p\in [0,1]$ is the soft value of $x$.} for clauses in 
+\[
+\phi_{\Sigma_1} = \exists y ( \overline{y} \land y),
+\]
+obtained from $\phi_{\Pi_2}$ by removing all universally quantified literals, and then
+\item outputs soft assignments for $y$ w.r.t. the weighted $\phi_{\Sigma_1}$, iterating its LSTM cell.
+\end{enumerate}
+\item Each soft assignment yields the combined negative log-likelihood over the soft truth values of the clauses.
+\item $\calN_{\Pi^\PTIME_2}$ is updated to maximize a weighted average over these values.
+\end{enumerate}
+
+A hard assignment is obtained by taking the argmax of the soft assignment associated with the maximum number of iterations.
+
+
+\subsection{Architecture}
+For now, see \cite{TonshoffRWG20} for the architecture of \RUNCSP. We have expanded it as follows: 
+
+\begin{itemize}
+\item  \RUNCSP handles only binary constraints. In order to deal with arbitrary $\QBF$ instances, \RUNQBF has been extended to deal with ternary clauses. Thus, while \RUNCSP contains two different message passing protocols (one for symmetric and another for non-symmetric binary constraints), \RUNQBF contains more protocols to take into account all possible symmetries in a ternary constraint. Another factor increasing the number of message networks is that different variables in the same constraint may be quantified at different levels.
+\item Each message that is sent between variable states in the same constraint is now weighted by the corresponding weight of that clause.
+\end{itemize}
+The implementation is extended to accommodate quantified formulae and the layered training style described above. A $\QBF$ formula in QDIMACS format is transformed to a Python object representing an equivalent formula in 3CNF form. This object is then transformed to an input dictionary.
+
+\section{Challenges}
+\begin{enumerate}
+\item An architecture designed to minimize or maximize satisfied constraints may not be that informative in terms of $\SAT$ or $\QBF$, unless the network obtains a very good performance. It may be easy to satisfy $99.9 \%$ clauses for one false formula, and hard to do the same for another true formula. Our tests with benchmark 2$\QBF$ instances achieved $>99\%$ satisfaction rate for most instances, but $100\%$ satisfaction rate for only 1/100 tested formulae.\footnote{Additionally, the universally quantified variables were not optimal, as explained in the next item.} Possible remedy: train $\calN_{\Sigma^\PTIME_1}$ with larger and more complex datasets and/or with greater state size. 
+\item The loss function needs recalibration for $\calN_{\Pi^\PTIME_2}$. Currently, the values of universally quantified variables converge to $1$ after few iterations. Possible remedy: less weight on early iterations.
+\item The loss function is too heavy for the second level.  Consequently, training $\calN_{\Pi^\PTIME_2}$ requires too much resources.\footnote{Tested with Google Colab and the AWS  EC2 instance g4dn.xlarge.} Possible remedy: get rid of the Cartesian logic behind the loss function. 
+\end{enumerate}
+One thing to consider is to start with much simpler instances, as in \cite{abs-2101-06619}, instead of the benchmark instances used in solver competitions.
+
+\section{Conclusion}
+Creating neural networks for solving $\QBF$ instances is an interesting open problem. These notes describe the author's side project which for now has to postponed due to lack of time.
+
+\bibliographystyle{abbrv}
+\bibliography{biblio}
+
+\end{document}
