@@ -1,0 +1,8 @@
+*.aux
+*.bbl
+*.blg
+*.log
+*.gz
+__pycache__/
+data/2QBF-train/
+data/2QBF-eval/
