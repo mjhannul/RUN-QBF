@@ -17,8 +17,8 @@ cd ..
 Train your own models by using the given training scripts. The following commands were used to train the Sigma1 and Pi2 models, respectively:
 
 ```
-python3 train.py -d 2QBF-train/Sigma1 -m models/Sigma1
-python3 train.py -d 2QBF-train/Pi2 -m models/Pi2 models/Sigma1 -b 1 -c 0 400 -e 4
+python3 train.py -d data/2QBF-train/Sigma1 -m models/Sigma1
+python3 train.py -d data/2QBF-train/Pi2 -m models/Pi2 models/Sigma1 -b 1 -c 0 400 -e 4
 ```
 
 Evaluate the Pi2 model using the command:
